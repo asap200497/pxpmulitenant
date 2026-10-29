@@ -1,69 +1,56 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+import { Suspense } from "react";
 
-export default function Home() {
+import { getTenant } from "@/tenants/config";
+import { TenantProvider } from "@/providers/TenantProvider";
+import { ThemeProvider } from "@/providers/ThemeProvider";
+
+import { CustomerLogo } from "@/components/CustomerLogo";
+import { LoginPanel } from "@/components/LoginPanel";
+
+type HomeProps = {
+  searchParams: Promise<{
+    customer?: string | string[];
+  }>;
+};
+
+// Inner component: reads URL parameters
+async function HomeContent({ searchParams }: HomeProps) {
+  const params = await searchParams;
+
+  const customer =
+    typeof params.customer === "string"
+      ? params.customer
+      : undefined;
+
+  const tenant = getTenant(customer);
+
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>
-            To get started, edit the{" "}
-            <code className={styles.code}>page.tsx</code> file.
-          </h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <TenantProvider tenant={tenant}>
+      <ThemeProvider>
+        <main
+          style={{
+            minHeight: "100vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+        >
+          <div style={{ width: 400, maxWidth: "100%" }}>
+            <CustomerLogo />
+            <LoginPanel />
+          </div>
+        </main>
+      </ThemeProvider>
+    </TenantProvider>
+  );
+}
+
+// Outer component: establishes the Suspense boundary
+export default function Home({ searchParams }: HomeProps) {
+  return (
+    <Suspense fallback={<div>Loading login...</div>}>
+      <HomeContent searchParams={searchParams} />
+    </Suspense>
   );
 }

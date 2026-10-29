@@ -1,0 +1,17 @@
+.loginContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.loginCard {
+  background: var(--tenant-surface);
+  border-top: 4px solid var(--tenant-primary);
+  border-radius: var(--tenant-radius);
+}
+
+.customerName {
+  color: var(--tenant-primary);
+  font-weight: 600;
+}
