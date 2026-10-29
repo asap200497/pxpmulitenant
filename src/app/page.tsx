@@ -1,3 +1,4 @@
+
 import { Suspense } from "react";
 
 import { getTenant } from "@/tenants/config";

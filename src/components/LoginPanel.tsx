@@ -1,24 +1,50 @@
 "use client";
-
+import axios from "axios";
+import { api } from "@/services/api";
+import { useRouter } from "next/navigation";
+import { message } from "antd";
+import { toast } from 'react-hot-toast';
 import { Card, Form, Input, Button, Typography } from "antd";
 import { IdcardOutlined, LockOutlined } from "@ant-design/icons";
 import { useTenant } from "@/providers/TenantProvider";
 import styles from "@/styles/login.module.scss";
-
+import { serverLogin } from "./serverlogin";
 const { Title, Text } = Typography;
 
 export function LoginPanel() {
   const tenant = useTenant();
+  const router = useRouter();
+ const [messageApi, contextHolder] = message.useMessage(); 
 
-  const onFinish = (values: {
-    cpf: string;
-    password: string;
-  }) => {
-    console.log("Tenant:", tenant.id);
-    console.log("CPF:", values.cpf);
+ const onFinish = async (values: {
+  cpf: string;
+  password: string;
+}) => {
+  try {
 
-    // Authentication will be implemented later.
-  };
+    const resp = await serverLogin(
+      values.cpf.replace(/\D/g, ""),
+      values.password,
+      tenant.id
+    );
+
+    if (resp.ok) {
+
+      router.push("/signed/dashboard");
+    } else {
+      toast.error(resp.message || "Erro no login");
+    }
+    router.refresh();
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      messageApi.error(
+        error.response?.data?.error ?? "Authentication failed"
+      );
+    } else {
+      messageApi.error("Unexpected error");
+    }
+  }
+}
 
   return (
     <Card className={styles.loginCard}>

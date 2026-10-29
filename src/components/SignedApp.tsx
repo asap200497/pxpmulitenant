@@ -1,6 +1,8 @@
-import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
-import { getTenant } from "@/tenants/config";
+import { getSession } from "@/lib/session";
+import { tenants } from "@/tenants/config";
+
 import { TenantProvider } from "@/providers/TenantProvider";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import RefineProvider from "@/providers/RefineProvider";
@@ -10,12 +12,17 @@ export default async function SignedApp({
 }: {
   children: React.ReactNode;
 }) {
-  const cookieStore = await cookies();
+  const session = await getSession();
 
-  const customer =
-    cookieStore.get("demo-tenant")?.value ?? "printxpert";
+  if (!session) {
+    redirect("/");
+  }
 
-  const tenant = getTenant(customer);
+  const tenant = tenants[session.tenantid];
+
+  if (!tenant) {
+    redirect("/");
+  }
 
   return (
     <TenantProvider tenant={tenant}>
