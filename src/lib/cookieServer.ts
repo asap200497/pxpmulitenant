@@ -1,4 +1,8 @@
-import { cookies } from 'next/headers'
+
+import "server-only";
+
+import { cookies } from "next/headers";
+
 
 export async function getCookieServer() {
     const cookieStore = await cookies();

@@ -28,9 +28,9 @@ export async function serverLogin(login: string, password: string , tenantid: an
   cookieStore.set("session", data.token, {
     maxAge,
     path: "/",
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    httpOnly: false,
+    secure: false, // process.env.NODE_ENV === "production",
+    //sameSite: "lax",
   });
     return { ok: true as const };
   } catch (err) {
