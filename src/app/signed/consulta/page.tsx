@@ -26,7 +26,7 @@ async function getMateriais():  Promise <MateriaisProps[] | []> {
 
 export default async function Page() {
     const materiais = await getMateriais();
-    const mults = [-1,8,4,2,1,0.5,0.25,0.125];
+
 
   
   return (

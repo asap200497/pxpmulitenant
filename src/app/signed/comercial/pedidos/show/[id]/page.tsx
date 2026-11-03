@@ -19,7 +19,6 @@ import React from "react";
 import { DownloadOutlined, FileTextOutlined, FilePdfOutlined } from "@ant-design/icons";
 import { api } from "@/services/api";
 import { getCookieClient } from "@/lib/cookieClient"
-import { headers } from "next/headers";
 
 const { Title, Text, Link } = Typography;
 
