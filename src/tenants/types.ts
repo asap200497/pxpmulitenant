@@ -4,6 +4,7 @@ export interface TenantBranding {
   logo: string;
   logoWidth: number;
   logoHeight: number;
+  menu: "light" | "dark";
 
   colors: {
     primary: string;

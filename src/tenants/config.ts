@@ -7,6 +7,7 @@ export const tenants: Record<string, TenantBranding> = {
     logo: "/logos/PrintXpert-Logo.png",
     logoWidth: 220,
     logoHeight: 170,
+    menu: "light",
     colors: {
       primary: "#1677ff",
       background: "#f5f5f5",
@@ -22,6 +23,7 @@ export const tenants: Record<string, TenantBranding> = {
     logo: "/logos/passaportelogo.png",
     logoWidth: 220,
     logoHeight: 80,
+      menu: "dark",
     colors: {
       primary: "#122582",
       background: "#0e2e86",

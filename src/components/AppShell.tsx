@@ -56,6 +56,7 @@ const handleLogout = async () => {
 
         <Menu
           mode="inline"
+          theme= {tenant.menu}
           items={buildMenu(menuItems)}
           selectedKeys={selectedKey ? [selectedKey] : []}
           defaultOpenKeys={defaultOpenKeys}

@@ -37,7 +37,22 @@ export function ThemeProvider({
           headerBg: tenant.colors.surface,
           siderBg: tenant.colors.surface,
         },
+        Menu: {
+          // PrintXPert — light
+          itemBg: "#f5f5f5",
+          itemColor: "#253047",
+          itemSelectedBg: "#e6f4ff",
+          itemSelectedColor: "#1677ff",
 
+          // Passaporte — dark
+          darkItemBg: "#0e2e86",
+          darkSubMenuItemBg: "#0e2e86",
+          darkItemColor: "#c8e5d7",
+          darkItemSelectedBg: "#aebbd5",
+          darkItemSelectedColor: "#122582",
+          darkItemHoverBg: "#29479c",
+          darkItemHoverColor: "#ffffff",
+        },
         Card: {
           colorBgContainer: tenant.colors.surface,
         },

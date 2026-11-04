@@ -163,7 +163,7 @@ export default function UsuarioList() {
                         }}
                     >
                         <Badge count={cartCount} size="small" color="#f5222d">
-                            <ShoppingCartOutlined style={{ fontSize: 26, color: "#333" }} />
+                            <ShoppingCartOutlined style={{ fontSize:30, color: tenant.colors.text}} />
                         </Badge>
                     </div>
 
