@@ -1,511 +1,427 @@
 "use client";
 
-import { Show, Edit, useForm, TextField } from "@refinedev/antd";
-import { Form, Input, Radio, Tag } from "antd";
-//import * as ReactInputMask from "react-input-mask";
-import { IMaskInput } from "react-imask";
-//const InputMask = ReactInputMask.default;
-import { Typography } from "antd";
-import { getCookieClient } from "@/lib/cookieClient";
-import { useEffect, useMemo, useState } from "react";
-import { api } from "@/services/api";
-import { toast } from 'react-hot-toast'
-import { useRouter } from 'next/navigation';
-import { Button, Space } from "antd";
-import { SendOutlined } from "@ant-design/icons";
-import dataProvider from "@refinedev/simple-rest";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Edit, TextField, useForm } from "@refinedev/antd";
 import { useNavigation } from "@refinedev/core";
-
-import { Browser } from "@capacitor/browser"
-
-import { App, type URLOpenListenerEvent } from "@capacitor/app";
-
-import { Capacitor, type PluginListenerHandle } from "@capacitor/core";
+import { Button, Form, Input, Radio, Space, Tag, Typography } from "antd";
+import { SendOutlined } from "@ant-design/icons";
+import { toast } from "react-hot-toast";
+import { useRouter } from "next/navigation";
+import { Browser } from "@capacitor/browser";
+import { App } from "@capacitor/app";
+import { Capacitor } from "@capacitor/core";
+import { getCookieClient } from "@/lib/cookieClient";
+import { api } from "@/services/api";
 
 const { Title } = Typography;
+const ORDERS_PATH = "/signed/comercial/pedidos";
 
-interface IProdutos {
-  preco: string;
+type ProductLine = {
+  preco: string | number;
   quantidade: number;
   produtos: { id: string; name: string };
-}
+};
 
 type Cotacao = {
   empresa_id: string;
   empresa: string;
   servico_id: string;
   servico: string;
-  preco: string; // "16,71"
+  preco: string | number;
   dias: number;
 };
 
-const toNumber = (s: string | number | undefined | null) => {
-  if (typeof s === "number") return s;
-  if (!s) return 0;
-  return parseFloat(String(s).replace(",", "."));
+type OrderRecord = {
+  id: string;
+  numero: number | string;
+  status: string;
+  total: number | string;
+  pesoestimado: number | string;
+  produtos?: ProductLine[];
 };
+
+type CheckoutValues = {
+  cepdestino?: string;
+  endereco?: string;
+  cidade?: string;
+  estado?: string;
+  numerodestino?: string;
+  complemento?: string;
+  pgto?: string;
+  //frete_empresa_id?: string;
+  frete_servico_id?: string;
+  frete_preco?: number;
+  frete_dias?: number;
+  franqueado_id?: string;
+  status?: string;
+};
+
+type CepResponse = { endereco?: string; cidade?: string; estado?: string };
+type MakerResponse = {
+  empresa?: {
+    id: string;
+    nomefantasia: string;
+    cidade: string;
+    estado: string;
+    cep: string;
+  };
+  cotacao?: Cotacao[];
+};
+
+function toNumber(value: string | number | null | undefined): number {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (!value) return 0;
+  const text = String(value).trim();
+  const normalized = text.includes(",")
+    ? text.replace(/\./g, "").replace(",", ".")
+    : text;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatCep(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  return digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
+}
+
+const formatBRL = (value: number) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+
 function useCieloReturn() {
   const router = useRouter();
 
   useEffect(() => {
-    let sub: PluginListenerHandle | undefined;
+    if (!Capacitor.isNativePlatform()) return;
+    let cancelled = false;
+    let removeListener: (() => Promise<void>) | undefined;
 
-    (async () => {
-      sub = await App.addListener(
-        "appUrlOpen",
-        async ({ url }: URLOpenListenerEvent) => {
-          try {
-            console.log("[appUrlOpen] got url:", url);
-            if (!url) return;
-
-            const u = new URL(url);
-            const hostOk = u.hostname === "printxpert.com.br";
-            const portOk = u.port === "" || u.port === "8443";
-            const pathOk = u.pathname.startsWith("/signed/comercial");
-
-            if (hostOk && portOk && pathOk) {
-              try { await Browser.close(); } catch {}
-              const status = u.searchParams.get("status");
-              const order  = u.searchParams.get("order");
-              console.log("[appUrlOpen] matched. Navigating to pedidos…", { status, order });
-              router.replace("/signed/comercial/pedidos");
-            } else {
-              console.log("[appUrlOpen] non-matching url, ignoring");
-            }
-          } catch (e) {
-            console.warn("[appUrlOpen] error", e);
-          }
+    void App.addListener("appUrlOpen", async ({ url }) => {
+      if (!url || cancelled) return;
+      try {
+        const parsed = new URL(url);
+        const validHost = parsed.hostname === "printxpert.com.br";
+        const validPort = parsed.port === "" || parsed.port === "8443";
+        const validPath = parsed.pathname.startsWith("/signed/comercial");
+        if (!validHost || !validPort || !validPath) return;
+        try {
+          await Browser.close();
+        } catch (error) {
+          console.debug("Cielo browser was already closed", error);
         }
-      );
-    })();
+        if (!cancelled) router.replace(ORDERS_PATH);
+      } catch (error) {
+        console.warn("Invalid Cielo return URL", error);
+      }
+    })
+      .then((listener) => {
+        if (cancelled) void listener.remove();
+        else removeListener = () => listener.remove();
+      })
+      .catch((error) => console.error("Unable to register Cielo listener", error));
 
-    return () => { sub?.remove?.(); };
+    return () => {
+      cancelled = true;
+      if (removeListener) void removeListener();
+    };
   }, [router]);
 
-  return async (url: string) => {
-    const platform = Capacitor.getPlatform();
-    console.log("[Cielo] opening payment on", platform, url);
-    if (platform === "android" || platform === "ios") {
+  return useCallback(async (url: string) => {
+    if (Capacitor.isNativePlatform()) {
       await Browser.open({ url });
     } else {
-      window.location.href = url;
+      window.location.assign(url);
     }
-  };
+  }, []);
 }
-
-const fmtBRL = (n: number) =>
-  new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(isNaN(n) ? 0 : n);
 
 export default function BlogPostEdit() {
   const router = useRouter();
-  const { list, show, edit, create } = useNavigation();
-
-  const safeNav = (path: string) => router.push(path.startsWith("/") ? path : `/${path}`);
-  const { formProps, form, saveButtonProps, query } = useForm();
-  const baseInitialValues = formProps?.initialValues || {};
-  const record = query?.data?.data;
+  const { list } = useNavigation();
+  const { formProps, form, query } = useForm();
+  const record = query?.data?.data as OrderRecord | undefined;
+  const recordId = record?.id;
 
   const [cotacoes, setCotacoes] = useState<Cotacao[]>([]);
-  const [endereco, setendereco] = useState("");
-  const [cidade, setcidade] = useState("");
-  const [estado, setestado] = useState("");
-  const [remetente, setremetente] = useState("");
-  const [franqueado_id, setfranqueado] = useState("");
-  const [loading, setLoading] = useState<Boolean>(false);
+  const [remetente, setRemetente] = useState("");
+  const [selectedFrete, setSelectedFrete] = useState<string>();
+  const [loading, setLoading] = useState(false);
+  const [loadingCep, setLoadingCep] = useState(false);
+  const cepRequest = useRef(0);
+  const lastLookedUpCep = useRef("");
+  const startCielo = useCieloReturn();
 
-  const startCielo =useCieloReturn()
-
-
-
-  // Watch selected freight price to calculate grand total
-  const fretePreco = Form.useWatch(["frete_preco"], form) as number | undefined;
-
+  const fretePreco = Form.useWatch("frete_preco", form) as number | undefined;
+  const franqueadoId = Form.useWatch("franqueado_id", form) as string | undefined;
   const baseTotal = toNumber(record?.total);
-  const grandTotal = baseTotal + (fretePreco || 0);
+  const grandTotal = baseTotal + toNumber(fretePreco);
 
-  const cotacaoOptions = useMemo(
-    () =>
-      cotacoes.map((c) => ({
-        value: `${c.empresa_id}:${c.servico_id}`,
-        raw: c,
-      })),
-    [cotacoes]
+  const freightOptions = useMemo(
+    () => cotacoes.map((item) => ({
+      key: `${item.empresa_id}:${item.servico_id}`,
+      item,
+    })),
+    [cotacoes],
   );
 
+  const clearFreight = useCallback(() => {
+    setCotacoes([]);
+    setSelectedFrete(undefined);
+    setRemetente("");
+    form.setFieldsValue({
+      //frete_empresa_id: undefined,
+      frete_servico_id: undefined,
+      frete_preco: undefined,
+      frete_dias: undefined,
+      franqueado_id: undefined,
+    });
+  }, [form]);
 
- const handleUpdate = async () => {
+  const selectFreight = useCallback((item: Cotacao, makerId: string) => {
+    setSelectedFrete(`${item.empresa_id}:${item.servico_id}`);
+    form.setFieldsValue({
+   //   frete_empresa_id: item.empresa_id,
+      frete_servico_id: item.servico_id,
+      frete_preco: toNumber(item.preco),
+      frete_dias: item.dias,
+      franqueado_id: makerId,
+    });
+  }, [form]);
+
+  const fetchAddressByCep = useCallback(async (rawCep: string) => {
+    const cep = rawCep.replace(/\D/g, "");
+    if (cep.length !== 8 || !recordId) return;
+    if (cep === lastLookedUpCep.current) return;
+
+    const requestId = ++cepRequest.current;
+    setLoadingCep(true);
+    clearFreight();
+    form.setFieldsValue({ endereco: "", cidade: "", estado: "" });
+
     try {
-      // Do your own stuff first
-    const tokenx = await getCookieClient();
+      const token = await getCookieClient();
+      const headers = { Authorization: `Bearer ${token}` };
+      const address = await api.get<CepResponse>(`/correios/cep?cep=${cep}`, { headers });
+      if (requestId !== cepRequest.current) return;
 
-    const  values = await form.validateFields() as any;
+      if (!address.data?.endereco) {
+        toast.error("CEP não encontrado");
+        return;
+      }
+      form.setFieldsValue({
+        endereco: address.data.endereco ?? "",
+        cidade: address.data.cidade ?? "",
+        estado: address.data.estado ?? "",
+      });
 
-    setLoading(true);
-    const data = (await api.patch("/order/checkout/" + record?.id, 
-      { 
-        OrderNumber: record?.numero,
-        price: grandTotal,
-        products: record?.produtos,
-        ...values
-      },
-      {
-        headers: { Authorization: `Bearer ${tokenx}` },
-      })) as any;
+      const maker = await api.get<MakerResponse>(
+        `/order/findmaker?id=${encodeURIComponent(recordId)}&cep=${cep}`,
+        { headers },
+      );
+      if (requestId !== cepRequest.current) return;
 
+      if (!maker.data?.empresa) {
+        toast.error("Fora da área de cobertura");
+        lastLookedUpCep.current = cep;
+        return;
+      }
 
-     if (data.data.linkpgto != undefined) {
-       await startCielo (data.data.linkpgto)
-     }
-     else {
-      list("pedidos");
-      //safeNav("/signed/comercial/pedidos");
-      return (<></>);
-     }
-      
+      const company = maker.data.empresa;
+      const options = maker.data.cotacao ?? [];
+      setRemetente(
+        `${company.nomefantasia} ${company.cidade}/${company.estado} ${company.cep}`,
+      );
+      setCotacoes(options);
+      form.setFieldValue("franqueado_id", company.id);
+      if (options.length) selectFreight(options[0], company.id);
+      else toast.error("Nenhuma opção de frete disponível");
+      lastLookedUpCep.current = cep;
     } catch (error) {
-      console.error("Update failed:", error);
+      if (requestId === cepRequest.current) {
+        console.error("CEP/freight lookup failed", error);
+        toast.error("Não foi possível consultar o CEP ou calcular o frete");
+      }
+    } finally {
+      if (requestId === cepRequest.current) setLoadingCep(false);
+    }
+  }, [recordId, form, clearFreight, selectFreight]);
+
+  const onCepChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const cep = formatCep(event.target.value);
+    if (cep.replace(/\D/g, "") !== lastLookedUpCep.current) {
+      lastLookedUpCep.current = "";
+      ++cepRequest.current;
+      setLoadingCep(false);
+      clearFreight();
+      form.setFieldsValue({ endereco: "", cidade: "", estado: "" });
+    }
+  }, [form, clearFreight]);
+
+  useEffect(() => {
+    if (!record?.status) return;
+    if (record.status !== "RASCUNHO" && record.status !== "ERRO") {
+      toast.success("AGUARDE EM PROCESSAMENTO");
+      router.replace(ORDERS_PATH);
+    }
+  }, [record?.status, router]);
+
+  const handleUpdate = async () => {
+
+
+    if (!recordId || loading || loadingCep) return;
+        console.log("dsadasdas")
+    try {
+            console.log("calling2")
+      const values = (await form.validateFields()) as CheckoutValues;
+                  console.log("calling3")
+      if (!values.franqueado_id || !values.frete_servico_id) {
+                          console.log("calling4")
+        toast.error("Selecione uma opção de frete válida");
+        return;
+      }
+      setLoading(true);
+      console.log("calling")
+      const token = await getCookieClient();
+      const response = await api.patch<{ linkpgto?: string }>(
+        `/order/checkout/${encodeURIComponent(recordId)}`,
+        {
+          OrderNumber: record?.numero,
+          price: grandTotal,
+          products: record?.produtos,
+          ...values,
+          cepdestino: values.cepdestino?.replace(/\D/g, ""),
+        },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+
+      if (response.data?.linkpgto) {
+        await startCielo(response.data.linkpgto);
+      } else {
+        list("pedidos");
+      }
+    } catch (error) {
+      console.error("Checkout failed", error);
+      toast.error("Não foi possível confirmar o pedido. Verifique os campos.");
+    } finally {
+      setLoading(false);
     }
   };
 
-  useEffect(() => {
-  if (endereco) {
-    form.setFieldsValue({ endereco: endereco });
-    form.setFieldsValue({ cidade: cidade }); 
-    form.setFieldsValue({ estado: estado });
-
-  }
-  }, [endereco, cidade, estado , form]);
-
-  useEffect(() => {
-    console.log(cotacaoOptions);
-    if (cotacaoOptions.length > 0) {
-      const first = cotacaoOptions[0];
-      form.setFieldsValue({
-        //freteopcao: first.value,
-        frete_empresa_id: first.raw.empresa_id,
-        frete_servico_id: first.raw.servico_id,
-  //      status: "PENDENTE",
-        frete_preco: toNumber(first.raw.preco),
-        franqueado_id: franqueado_id,
-        frete_dias: first.raw.dias,
-        endereco: endereco,
-      });
-    } else {
-      form.setFieldsValue({
-        //freteopcao: undefined,
-        frete_empresa_id: undefined,
-        frete_servico_id: undefined,
-        frete_preco: undefined,
-        frete_dias: undefined,
-      });
-    }
-  }, [cotacaoOptions, form, endereco, franqueado_id]);
-    useEffect(() => {
-      if (!record?.status) return;
-      if (record.status !== "RASCUNHO" && record.status !== "ERRO") {
-        toast.success("AGUARDE EM PROCESSAMENTO");
-        router.replace("/signed/comercial/pedidos");
-      }
-    }, [record?.status, router]);
-  
-  async function fetchAddressByCep(cep: string) {
-    const token = await getCookieClient();
-
-    const data = (await api.get("/correios/cep?cep=" + cep, {
-      headers: { Authorization: `Bearer ${token}` },
-    })) as any;
-
-    if (data) {
-      setendereco(
-        data.data?.endereco 
-      );
-      setcidade(
-        data.data?.cidade 
-      );
-      setestado(
-        data.data?.estado 
-      );
-
-      const datacotacoes = await api.get(
-        "/order/findmaker?id=" + record?.id + "&cep=" + cep,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (datacotacoes.data.empresa) {
-        setCotacoes(datacotacoes.data.cotacao as Cotacao[]);
-        setfranqueado(datacotacoes.data.empresa.id);
-        setremetente(
-        datacotacoes.data.empresa.nomefantasia +
-          " " +
-          datacotacoes.data.empresa.cidade +
-          "/" +
-          datacotacoes.data.empresa.estado +
-          " " +
-          datacotacoes.data.empresa.cep
-        )
-
-      } else {
-        setCotacoes([]);
-        setfranqueado( "" ) ;
-        setremetente("");
-        toast.error("Fora da Area de Cobertura");
-      } 
-
-      if (datacotacoes.data.length) {
-        setCotacoes(datacotacoes.data.cotacao as Cotacao[]);
-      }  
-      
-    } else {
-      console.warn("CEP não encontrado");
-    }
-  }
   return (
-        <Edit
-          footerButtons={() => (
-            <Space>
-              <Button
-                type="primary"
-                icon={<SendOutlined />}
-                loading={saveButtonProps.loading}
-                disabled={franqueado_id? false: true}
-                onClick={handleUpdate}
-              >
-              {loading ? "Processando…" : "Confirmar"}
-              </Button>
-            </Space>
-          )}
-        >
+    <Edit
+      footerButtons={() => (
+        <Space>
+          <Button
+            type="primary"
+            icon={<SendOutlined />}
+            loading={loading}
+            disabled={!recordId || !franqueadoId || !selectedFrete || loadingCep || loading}
+            onClick={() => void handleUpdate()}
+          >
+            {loading ? "Processando…" : "Confirmar"}
+          </Button>
+        </Space>
+      )}
+    >
       <Title level={5}>ID</Title>
       <TextField value={record?.id} />
-
       <Title level={5}>Número</Title>
       <TextField value={record?.numero} />
-
       <Title level={5}>Produtos</Title>
-      {record?.produtos?.map((item: IProdutos, index: number) => (
-        <div key={index} style={{ marginBottom: 12 }}>
+      {record?.produtos?.map((item, index) => (
+        <div key={`${item.produtos.id}-${index}`} style={{ marginBottom: 12 }}>
           <Space direction="vertical">
             <TextField value={`Produto: ${item.produtos.name}`} />
             <TextField value={`Quantidade: ${item.quantidade}`} />
-            <TextField
-              value={`Preço unitário: ${fmtBRL(toNumber(item.preco))}`}
-            />
-            <TextField
-              value={`Subtotal: ${fmtBRL(
-                item.quantidade * toNumber(item.preco)
-              )}`}
-            />
+            <TextField value={`Preço unitário: ${formatBRL(toNumber(item.preco))}`} />
+            <TextField value={`Subtotal: ${formatBRL(item.quantidade * toNumber(item.preco))}`} />
           </Space>
         </div>
       ))}
-
       <Title level={5}>Peso</Title>
-      <TextField
-        value={`${(toNumber(record?.pesoestimado) / 1000).toFixed(2)} Kg`}
-      />
+      <TextField value={`${(toNumber(record?.pesoestimado) / 1000).toFixed(2)} Kg`} />
 
-      <Form {...formProps} layout="vertical" initialValues={{ ...baseInitialValues }  }>
-      <Form.Item
-        label="CEP"
-        name="cep"
-      >
-        <IMaskInput
-          mask="00000-000"
-          placeholder="00000-000"
-          onBlur={(e) => {
-            const cep = e.currentTarget.value.replace(/\D/g, "");
-
-            if (cep.length === 8) {
-              console.log("Consultar CEP:", cep);
-              // Your existing CEP lookup logic
-            }
-          }}
-          style={{
-            width: "100%",
-            padding: "4px 11px",
-            border: "1px solid #d9d9d9",
-            borderRadius: 6,
-            fontSize: 14,
-          }}
-        />
-      </Form.Item>
-
-        <Form.Item label={"Endereco"} name={["endereco"]} >
-              <Input readOnly placeholder="Endereco sera preenchido" />
+      <Form {...formProps} form={form} layout="vertical">
+        <Form.Item label="CEP" name="cepdestino" getValueFromEvent={(event: React.ChangeEvent<HTMLInputElement>) => formatCep(event.target.value)} rules={[{ required: true, message: "Informe o CEP" }, { pattern: /^\d{5}-?\d{3}$/, message: "CEP inválido" }]}>
+          <Input
+            placeholder="00000-000"
+            maxLength={9}
+            inputMode="numeric"
+            onChange={onCepChange}
+            onBlur={(event) => void fetchAddressByCep(event.currentTarget.value)}
+            suffix={<span style={{ display: "inline-block", minWidth: 90, fontSize: 12 }}>{loadingCep ? "Consultando…" : ""}</span>}
+          />
         </Form.Item>
-        <Form.Item label={"cidade"} name={["cidade"]} >
-              <Input readOnly placeholder="Endereco sera preenchido" />
+        <Form.Item label="Endereço" name="endereco" rules={[{ required: true, message: "Consulte um CEP válido" }]}>
+          <Input readOnly placeholder="Endereço será preenchido" />
         </Form.Item>
-        <Form.Item label={"estado"} name={["estado"]} >
-              <Input readOnly placeholder="Endereco sera preenchido" />
+        <Form.Item label="Cidade" name="cidade" rules={[{ required: true }]}>
+          <Input readOnly placeholder="Cidade será preenchida" />
         </Form.Item>
-
-
-        <Form.Item label={"Remetente"} name={["remetente"]} >
-          <span>{remetente}</span>
+        <Form.Item label="Estado" name="estado" rules={[{ required: true }]}>
+          <Input readOnly placeholder="Estado será preenchido" />
         </Form.Item>
-
-        <Form.Item label={"Numero"} name={["numerodestino"]}
-                  rules={[{ required: true }, ]}>
+        <Form.Item label="Remetente">
+          <span>{remetente || "Aguardando consulta do CEP"}</span>
+        </Form.Item>
+        <Form.Item label="Número" name="numerodestino" rules={[{ required: true, message: "Informe o número" }]}>
+          <Input />
+        </Form.Item>
+        <Form.Item label="Complemento" name="complemento">
           <Input />
         </Form.Item>
 
-        <Form.Item label={"Complemento"} name={["complemento"]}>
-          <Input />
-        </Form.Item>
-
-
-        {/* --- Frete - “prettier” list --- */}
-        <Form.Item
-          label="Frete"
-//          name={["freteopcao"]}
-          rules={[{ required: true, message: "Selecione um frete" }]}
-        >
-          <div
-            style={{
-              background: "#e6f7ff",
-              padding: 12,
-              borderRadius: 10,
-              border: "1px solid #91d5ff",
-              maxWidth: 520,
-            }}
-          >
+        <Form.Item label="Frete" required>
+          <div style={{ background: "#e6f7ff", padding: 12, borderRadius: 10, border: "1px solid #91d5ff", maxWidth: 520 }}>
             <Radio.Group
-              style={{ width: "100%" }}
-              onChange={(e) => {
-                const picked = cotacoes.find(
-                  (c) => `${c.empresa_id}:${c.servico_id}` === e.target.value
-                );
-                if (picked) {
-                  form.setFieldsValue({
-                    frete_empresa_id: picked.empresa_id,
-                    frete_servico_id: picked.servico_id,
-                    frete_preco: toNumber(picked.preco),
-                    frete_dias: picked.dias,
-                  });
-                }
+              value={selectedFrete}
+              disabled={loadingCep || !franqueadoId}
+              onChange={(event) => {
+                const picked = freightOptions.find((option) => option.key === event.target.value);
+                if (picked && franqueadoId) selectFreight(picked.item, franqueadoId);
               }}
+              style={{ width: "100%" }}
             >
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {cotacoes.map((c) => {
-                  const value = `${c.empresa_id}:${c.servico_id}`;
-                  const price = fmtBRL(toNumber(c.preco));
-                  return (
-                    <Radio value={value} key={value} style={{ display: "block" }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          gap: 12,
-                          padding: "10px 12px",
-                          borderRadius: 8,
-                          border: "1px solid #d9f0ff",
-                          background: "#ffffff",
-                          transition: "all .15s ease-in-out",
-                        }}
-                        className="frete-row"
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontWeight: 600 }}>
-                            {c.empresa} {c.servico ? `• ${c.servico}` : ""}
-                          </span>
-                          <Tag color="blue" style={{ marginLeft: 4 }}>
-                            {c.dias} dia{c.dias === 1 ? "" : "s"}
-                          </Tag>
-                        </div>
-                        <strong style={{ fontSize: 16 }}>{price}</strong>
-                      </div>
-                    </Radio>
-                  );
-                })}
-              </div>
+              <Space direction="vertical" style={{ width: "100%" }}>
+                {freightOptions.map(({ key, item }) => (
+                  <Radio key={key} value={key} style={{ width: "100%" }}>
+                    <span style={{ fontWeight: 600 }}>{item.empresa} {item.servico ? `• ${item.servico}` : ""}</span>{" "}
+                    <Tag color="blue">{item.dias} dia{item.dias === 1 ? "" : "s"}</Tag>{" "}
+                    <strong>{formatBRL(toNumber(item.preco))}</strong>
+                  </Radio>
+                ))}
+              </Space>
             </Radio.Group>
+            {!freightOptions.length && <span>{loadingCep ? "Calculando frete…" : "Informe o CEP para calcular o frete"}</span>}
           </div>
         </Form.Item>
 
-      {/* Total prettier + dynamic grand total */}
-      <Title level={5} style={{ marginBottom: 4 }}>
-        Total
-      </Title>
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          alignItems: "baseline",
-          marginBottom: 12,
-          flexWrap: "wrap",
-        }}
-      >
-        <span style={{ fontWeight: 600 }}>{fmtBRL(baseTotal)}</span>
-        {typeof fretePreco === "number" && !isNaN(fretePreco) && (
-          <>
-            <span style={{ opacity: 0.75 }}>+ frete</span>
-            <span style={{ fontWeight: 600 }}>{fmtBRL(fretePreco)}</span>
-            <span style={{ opacity: 0.75 }}>=</span>
-            <span
-              style={{
-                fontWeight: 700,
-                padding: "2px 8px",
-                borderRadius: 6,
-                background: "#f6ffed",
-                border: "1px solid #b7eb8f",
-              }}
-              title="Total com frete"
-            >
-              {fmtBRL(grandTotal)}
-            </span>
-          </>
-        )}
-      </div>
-        <Form.Item label={"Forma Pagamento"} name={["pgto"] } rules={[{ required: true }]} >
-            <Radio.Group
-              style={{ width: "100%" }}
-            >
-              <Radio value="Credito">Credito</Radio>  
-              <Radio value="CIELO">Pagar Online (CIELO)</Radio>  
-              
-            </Radio.Group>
+        <Title level={5}>Total</Title>
+        <Space wrap>
+          <strong>{formatBRL(baseTotal)}</strong>
+          {typeof fretePreco === "number" && (
+            <>
+              <span>+ frete</span>
+              <strong>{formatBRL(fretePreco)}</strong>
+              <span>=</span>
+              <strong>{formatBRL(grandTotal)}</strong>
+            </>
+          )}
+        </Space>
+
+        <Form.Item label="Forma de pagamento" name="pgto" rules={[{ required: true, message: "Selecione a forma de pagamento" }]} style={{ marginTop: 20 }}>
+          <Radio.Group>
+            <Radio value="Credito">Crédito</Radio>
+            <Radio value="CIELO">Pagar Online (CIELO)</Radio>
+          </Radio.Group>
         </Form.Item>
 
-
-        {/* Hidden fields for submission */}
-        {/* <Form.Item name={["frete_empresa_id"]} hidden>
-          <Input />
-        </Form.Item> */}
-        
-        <Form.Item name={["frete_servico_id"]} hidden>
-          <Input />
-        </Form.Item>
-        <Form.Item name={["frete_preco"]} hidden>
-          <Input />
-        </Form.Item>
-        <Form.Item name={["frete_dias"]} hidden>
-          <Input />
-        </Form.Item>
-        <Form.Item name={["status"]} hidden>
-          <Input />
-        </Form.Item>
-        <Form.Item name={["franqueado_id"]} hidden>
-          <Input />
-        </Form.Item>
+        <Form.Item name="frete_empresa_id" hidden><Input /></Form.Item>
+        <Form.Item name="frete_servico_id" hidden><Input /></Form.Item>
+        <Form.Item name="frete_preco" hidden><Input /></Form.Item>
+        <Form.Item name="frete_dias" hidden><Input /></Form.Item>
+        <Form.Item name="status" hidden><Input /></Form.Item>
+        <Form.Item name="franqueado_id" hidden><Input /></Form.Item>
       </Form>
-
-      {/* Quick hint for hover/selected feel (optional): */}
-      <style jsx>{`
-        :global(.frete-row:hover) {
-          border-color: #69b1ff;
-          box-shadow: 0 2px 10px rgba(105, 177, 255, 0.2);
-        }
-        :global(.ant-radio-wrapper-checked .frete-row) {
-          border-color: #1677ff;
-          box-shadow: 0 2px 12px rgba(22, 119, 255, 0.25);
-        }
-      `}</style>
     </Edit>
   );
 }
