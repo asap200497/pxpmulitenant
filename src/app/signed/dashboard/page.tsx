@@ -5,6 +5,7 @@ import { api } from "@/services/api";
 import { EmpresaProps } from "@/interfaces/index";
 import { ProductProps } from "@/lib/product.type";
 import { useEffect, useState } from "react";
+import { useTenant } from "@/providers/TenantProvider";
 
 import type { DataNode } from "antd/es/tree";
 import {
@@ -26,6 +27,7 @@ import {
     ClusterOutlined,
 } from "@ant-design/icons";
 import { Card, Tree, Tag, Space, Typography, Divider, Row, Col } from "antd";
+import { tenants } from "@/tenants/config";
 const { Text } = Typography;
 
 
@@ -76,7 +78,7 @@ function convertToTreeData(data: EmpresaProps[]): DataNode[] {
                 </div>
             );
         });
-
+      
         return {
             key: item.id,
             title: (
@@ -151,6 +153,7 @@ export default function EmpresaTreeView() {
 
     const { resource } = useParsed();
 
+      const tenant = useTenant();
 
     const { tableProps } = useTable({
  //       resource: resource?.name ?? "dashboardrelated", // fallback in case resource is undefined
@@ -170,7 +173,7 @@ export default function EmpresaTreeView() {
 
     return (
         <div className="safe-page mobile-friendly" style={{ padding: 16 }}>
-            <h2>Árvore de Empresas</h2>
+            <h2 style={{ color: tenant.colors.text }}>Árvore de Empresas</h2>
             <Tree treeData={treeData} defaultExpandAll />
         </div>
     );

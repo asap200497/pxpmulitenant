@@ -11,6 +11,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import * as ReactInputMask from "react-input-mask";
 const InputMask = ReactInputMask.default;
+import { useTenant } from "@/providers/TenantProvider";
 
 const PdfThumbnail = dynamic(() => import("./pdfthumbnail"), {
     ssr: false,
@@ -143,6 +144,8 @@ export default function UsuarioList() {
     const sortedCategoryNames = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
     const [observacaoPedido, setObservacaoPedido] = useState("");
     const [enderecodestino, setenderecodestino] = useState("");
+    
+    const tenant = useTenant();
 
     return (
         <div style={{ padding: 24, position: "relative" }}>
@@ -205,7 +208,7 @@ export default function UsuarioList() {
             {/* Lista de Produtos */}
             {sortedCategoryNames.map((category) => (
                 <div key={category} style={{ marginBottom: 32 }}>
-                    <h2>{category}</h2>
+                    <h2 style={{ color: tenant.colors.text }} >{category}</h2>
                     <Row gutter={[12,12]}>
                         {grouped[category].map((product) => (
                             <Col xs={24} sm={12} md={8} lg={6} key={product.id}>

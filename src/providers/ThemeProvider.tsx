@@ -21,43 +21,43 @@ export function ThemeProvider({
 
   return (
     <ConfigProvider
-      theme={{
-        algorithm: antdTheme.defaultAlgorithm,
+          theme={{
+      algorithm: antdTheme.defaultAlgorithm,
 
-        token: {
-          colorPrimary: tenant.colors.primary,
-          colorBgBase: tenant.colors.background,
-          colorTextBase: tenant.colors.text,
-          borderRadius: tenant.borderRadius,
+      token: {
+        colorPrimary: tenant.colors.primary,
+        colorBgBase: tenant.colors.background,
+        colorTextBase: tenant.colors.text,
+        borderRadius: tenant.borderRadius,
+      },
+
+      components: {
+        Layout: {
+          bodyBg: tenant.colors.background,
+          headerBg: tenant.colors.surface,
+          siderBg: tenant.colors.surface,
         },
 
-        components: {
-          Layout: {
-            bodyBg: tenant.colors.background,
-            headerBg: tenant.colors.surface,
-            siderBg: tenant.colors.surface,
-          },
-
-          Card: {
-            colorBgContainer: tenant.colors.surface,
-          },
-
-          Button: {
-            primaryShadow: "none",
-          },
+        Card: {
+          colorBgContainer: tenant.colors.surface,
         },
-      }}
+
+        Button: {
+          primaryShadow: "none",
+        },
+      },
+    }}
     >
-      <div
-        style={{
-          ...cssVariables,
-          minHeight: "100vh",
-          background: tenant.colors.background,
-          color: tenant.colors.text,
-        }}
-      >
-        {children}
-      </div>
+<div
+  style={{
+    ...cssVariables,
+    minHeight: "100vh",
+    background: tenant.colors.background,
+    color: tenant.colors.text,
+  }}
+>
+  {children}
+</div>
     </ConfigProvider>
   );
 }

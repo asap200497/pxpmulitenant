@@ -173,7 +173,7 @@ export default function EmpresaTreeView() {
 
     return (
         <div style={{ padding: 24 }}>
-            <h2>Árvore de Empresas</h2>
+        <h2 style={{ color: "#FFFFFF" }}>Árvore de Empresas</h2>
             <Tree treeData={treeData} defaultExpandAll />
         </div>
     );

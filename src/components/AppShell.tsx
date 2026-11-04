@@ -78,16 +78,16 @@ const handleLogout = async () => {
 
         <Header
           style={{
-            background: "#fff",
-            padding: "0 24px",
-            lineHeight: "normal", // Important!
+            background: tenant.colors.background,
+            color: "#253047",
+            height: 72,
+            lineHeight: "normal",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            borderBottom: "1px solid #f0f0f0",
           }}
         >
-          <span style={{ fontWeight: 600, fontSize: 16 }}>
+          <span style={{ fontWeight: 600, fontSize: 16 , color: tenant.colors.text}}>
             {tenant.name} ERP
           </span>
 
@@ -95,10 +95,11 @@ const handleLogout = async () => {
         </Header>
 
         <Content
-          style={{
+      style={{
+            background: tenant.colors.background,
+            color: "#253047",
             padding: 24,
-            background: "#f5f5f5",
-            minWidth: 0,
+            minHeight: "calc(100vh - 72px)",
           }}
         >
           {children}
