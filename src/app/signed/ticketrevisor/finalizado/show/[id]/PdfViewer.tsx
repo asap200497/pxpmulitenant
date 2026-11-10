@@ -7,7 +7,7 @@ import Image from 'next/image'
 import { getCookieClient } from "@/lib/cookieClient";
 
 // Set PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc =  "/pdf.worker.min.js";
+pdfjsLib.GlobalWorkerOptions.workerSrc =  "/pdf.worker.min.mjs";
 
 interface PdfViewerProps {
     url: string;

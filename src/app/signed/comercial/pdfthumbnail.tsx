@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import { getCookieClient } from "@/lib/cookieClient";
 import Image from 'next/image' 
-pdfjsLib.GlobalWorkerOptions.workerSrc =  "/pdf.worker.min.js";
+pdfjsLib.GlobalWorkerOptions.workerSrc =  "/pdf.worker.min.mjs";
 //pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
 
 interface Props {

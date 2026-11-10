@@ -49,7 +49,7 @@ export function ThemeProvider({
           darkSubMenuItemBg: "#0e2e86",
           darkItemColor: "#c8e5d7",
           darkItemSelectedBg: "#aebbd5",
-          darkItemSelectedColor: "#122582",
+          darkItemSelectedColor: "#b22361",
           darkItemHoverBg: "#29479c",
           darkItemHoverColor: "#ffffff",
         },
